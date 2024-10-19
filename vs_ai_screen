@@ -1,1 +1,393 @@
+mport 'dart:math'; 
+import 'package:flutter/material.dart';
+import 'package:tic_tactics/lobby.dart';
 
+class VsAiScreen extends StatefulWidget {
+  @override
+  _VsAiScreenState createState() => _VsAiScreenState();
+}
+
+class _VsAiScreenState extends State<VsAiScreen> {
+  List<String> _board = List.filled(9, '');
+  String _currentPlayer = 'X'; // Player is X, AI is O
+  bool _isGameOver = false;
+  String _difficulty = 'easy'; // Default difficulty
+  String _startingPlayer = 'Player';
+  int? _highlightedMove; // To track the move that will disappear
+
+  List<int> _playerMoves = []; // To track player (X) moves
+  List<int> _aiMoves = [];     // To track AI (O) moves
+  List<String> _startingOptions = ['Player', 'AI']; // Options for starting player
+
+  List<String> _difficulties = ['Easy', 'Normal', 'Hard', 'Impossible']; // Difficulty options
+  String _selectedDifficulty = 'Easy'; // Default selected difficulty
+
+  @override
+  void initState() {
+    super.initState();
+  }
+
+  void _applyDifficulty(String difficulty) {
+    switch (difficulty) {
+      case 'Easy':
+        _difficulty = 'easy';
+        break;
+      case 'Normal':
+        _difficulty = 'normal';
+        break;
+      case 'Hard':
+        _difficulty = 'hard';
+        break;
+      case 'Impossible':
+        _difficulty = 'impossible';
+        break;
+      default:
+        _difficulty = 'easy';
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: Theme.of(context).colorScheme.primary,
+      appBar: AppBar(
+        backgroundColor: Theme.of(context).colorScheme.primary,
+        title: Text(
+          'Tic Tactics - VS AI',
+          style: TextStyle(color: Colors.white), // Set AppBar title color to white
+        ),
+        iconTheme: IconThemeData(
+    color: const Color.fromARGB(255, 255, 255, 255), // Change this to the desired color
+  ),
+      ),
+      body: Column(
+        mainAxisAlignment: MainAxisAlignment.center, // Center vertically
+        children: [
+          // Dropdown to select difficulty above the board
+          Padding(
+            padding: const EdgeInsets.all(16.0),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                // Dropdown for Difficulty
+                DropdownButton<String>(
+                  value: _selectedDifficulty,
+                  icon: Icon(Icons.arrow_downward, color: Colors.white),
+                  elevation: 16,
+                  style: TextStyle(color: Theme.of(context).colorScheme.primary),
+                  underline: Container(
+                    height: 2,
+                    color: Colors.white,
+                  ),
+                  dropdownColor: Theme.of(context).colorScheme.primary,
+                  onChanged: (String? newValue) {
+                    setState(() {
+                      _selectedDifficulty = newValue!;
+                      _applyDifficulty(_selectedDifficulty);
+                      _resetGame(); // Restart the game when difficulty changes
+                    });
+                  },
+                  items: _difficulties.map<DropdownMenuItem<String>>((String value) {
+                    return DropdownMenuItem<String>(
+                      value: value,
+                      child: Text(
+                        value,
+                        style: const TextStyle(color: Colors.white, fontSize: 20),
+                      ),
+                    );
+                  }).toList(),
+                ),
+                
+                SizedBox(height: 16), // Spacer
+                
+                // Text "Start?"
+                Text(
+                  "Start?",
+                  style: TextStyle(color: Colors.white, fontSize: 20),
+                ),
+                
+                // Radio buttons for starting player
+                RadioListTile<String>(
+                  title: const Text('Player', style: TextStyle(color: Colors.white)),
+                  value: 'Player',
+                  groupValue: _startingPlayer,
+                  activeColor: Colors.blue, // Blue when selected
+                  onChanged: (String? value) {
+                    setState(() {
+                      _startingPlayer = value!;
+                      _resetGame(); // Restart the game when starting player changes
+                    });
+                  },
+                ),
+                RadioListTile<String>(
+                  title: const Text('AI', style: TextStyle(color: Colors.white)),
+                  value: 'AI',
+                  groupValue: _startingPlayer,
+                  activeColor: Colors.blue, // Blue when selected
+                  onChanged: (String? value) {
+                    setState(() {
+                      _startingPlayer = value!;
+                      _resetGame(); // Restart the game when starting player changes
+                    });
+                  },
+                ),
+              ],
+            ),
+          ),
+
+          Center(
+            child: SizedBox(
+              width: 400, // Adjust width to center the board
+              height: 400, // Adjust height to center the board
+              child: GridView.builder(
+                gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                  crossAxisCount: 3,
+                  crossAxisSpacing: 0,
+                  mainAxisSpacing: 0,
+                ),
+                itemCount: 9,
+                itemBuilder: (context, index) {
+                  return GestureDetector(
+                    onTap: () => _makeMove(index),
+                    child: Container(
+                      decoration: BoxDecoration(
+                        border: Border.all(color: const Color.fromARGB(255, 255, 255, 255), width: 2.5),
+                        color: _highlightedMove == index
+                            ? Colors.yellow.withOpacity(0.5) // Highlight the move that will disappear
+                            : Colors.transparent,
+                      ),
+                      child: Center(
+                        child: Text(
+                          _board[index],
+                          style: TextStyle(
+                            fontSize: 80,
+                            color: _board[index] == 'X'
+                                ? Colors.blue // X is blue
+                                : _board[index] == 'O'
+                                    ? Colors.red // O is red
+                                    : Colors.white, // Empty cells are white
+                          ),
+                        ),
+                      ),
+                    ),
+                  );
+                },
+              ),
+            ),
+          ),
+          if (_isGameOver)
+            ElevatedButton(
+              onPressed: _resetGame,
+              child: Text(
+                'Play Again',
+                style: TextStyle(color: Theme.of(context).colorScheme.primary), // Set button text color to white
+              ),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.white, // Button background color
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  void _makeMove(int index) {
+  if (_board[index] == '' && !_isGameOver) {
+    setState(() {
+      _board[index] = _currentPlayer;
+      _playerMoves.add(index); // Track the player's move
+
+      // Highlight the oldest move as soon as the player has 3 or more moves
+      if (_playerMoves.length >= 3) {
+        _highlightedMove = _playerMoves.first;
+      }
+    });
+
+    // If player makes the fourth move, remove the oldest
+    if (_playerMoves.length > 3) {
+      setState(() {
+        int oldestMove = _playerMoves.removeAt(0); // Remove oldest move
+        _board[oldestMove] = ''; // Clear the oldest move on the board
+        _highlightedMove = _playerMoves.isNotEmpty ? _playerMoves.first : null; // Update highlight
+      });
+    }
+
+    if (_checkWin(_currentPlayer)) {
+      _showResult('Player $_currentPlayer Wins!');
+      return;
+    }
+
+    // Switch turn to AI
+    _currentPlayer = 'O';
+    _aiMove();
+  }
+}
+
+  void _aiMove() {
+  List<int> availableMoves = [];
+  for (int i = 0; i < _board.length; i++) {
+    if (_board[i] == '') {
+      availableMoves.add(i);
+    }
+  }
+
+  if (availableMoves.isEmpty || _isGameOver) return;
+
+  int aiMoveIndex;
+
+  switch (_difficulty) {
+    case 'easy':
+      // Easy mode: Random move
+      aiMoveIndex = _getRandomMove(availableMoves);
+      break;
+
+    case 'normal':
+      // Normal mode: Block player's winning move if possible, otherwise random
+      aiMoveIndex = _findBlockingMove() ?? _getRandomMove(availableMoves);
+      break;
+
+    case 'hard':
+      // Hard mode: Prioritize winning and blocking moves
+      aiMoveIndex = _findWinningMove('O') ?? _findBlockingMove() ?? _getRandomMove(availableMoves);
+      break;
+
+    case 'impossible':
+    aiMoveIndex = _findWinningMove('O') ?? _findBlockingMove() ?? _getRandomMove(availableMoves);
+      break;
+
+      // Impossible mode: Use minimax algorithm for perfect play
+      //var bestMove = _minimax('O', 0, -1000, 1000); // Set alpha = -1000 and beta = 1000
+      //aiMoveIndex = bestMove['index'];
+      //break;
+
+    default:
+      aiMoveIndex = _getRandomMove(availableMoves);
+  }
+
+  setState(() {
+    _board[aiMoveIndex] = 'O';
+    _aiMoves.add(aiMoveIndex);
+  });
+
+  // If AI has more than 3 moves, remove the oldest
+  if (_aiMoves.length > 3) {
+    int oldestMove = _aiMoves.removeAt(0); // Remove oldest move
+    _board[oldestMove] = ''; // Clear the oldest move on the board
+  }
+
+  if (_checkWin('O')) {
+    _showResult('AI Wins!');
+  }
+
+  _currentPlayer = 'X'; // Switch turn back to player
+}
+
+int _getRandomMove(List<int> availableMoves) {
+  return availableMoves[Random().nextInt(availableMoves.length)];
+}
+
+int? _findBlockingMove() {
+  return _findWinningMove('X'); // Block player's winning move
+}
+
+int? _findWinningMove(String player) {
+  for (var combination in _winningCombinations()) {
+    if (_board[combination[0]] == player && _board[combination[1]] == player && _board[combination[2]] == '') {
+      return combination[2];
+    } else if (_board[combination[0]] == player && _board[combination[2]] == player && _board[combination[1]] == '') {
+      return combination[1];
+    } else if (_board[combination[1]] == player && _board[combination[2]] == player && _board[combination[0]] == '') {
+      return combination[0];
+    }
+  }
+  return null;
+}
+
+List<List<int>> _winningCombinations() {
+  return [
+    [0, 1, 2], // Top row
+    [3, 4, 5], // Middle row
+    [6, 7, 8], // Bottom row
+    [0, 3, 6], // Left column
+    [1, 4, 7], // Middle column
+    [2, 5, 8], // Right column
+    [0, 4, 8], // Diagonal from top-left to bottom-right
+    [2, 4, 6], // Diagonal from top-right to bottom-left
+  ];
+}
+  bool _checkWin(String player) {
+  const winningCombinations = [
+    [0, 1, 2],
+    [3, 4, 5],
+    [6, 7, 8],
+    [0, 3, 6],
+    [1, 4, 7],
+    [2, 5, 8],
+    [0, 4, 8],
+    [2, 4, 6],
+  ];
+
+  for (var combination in winningCombinations) {
+    if (_board[combination[0]] == player &&
+        _board[combination[1]] == player &&
+        _board[combination[2]] == player) {
+      _isGameOver = true;
+      return true;
+    }
+  }
+
+  if (!_board.contains('')) {
+    _showResult('Draw!');
+    _isGameOver = true;
+  }
+  return false;
+}
+
+  Future<void> _showResult(String message) async {
+    showDialog(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: const Text('Game Over', style: TextStyle(fontSize: 30, color: Color.fromARGB(255, 0, 0, 0)), textAlign: TextAlign.center),
+          content: Text(message, style: const TextStyle(fontSize: 15, color: Color.fromARGB(255, 0, 0, 0)), textAlign: TextAlign.center),
+          backgroundColor: Colors.white, // Match the app theme
+          actions: [
+            TextButton(
+  onPressed: () {
+    Navigator.of(context).pushAndRemoveUntil(
+      MaterialPageRoute(
+        builder: (context) => LobbyScreen(), // Navigate to LobbyScreen
+      ),
+      (Route<dynamic> route) => false, // Remove all previous routes
+    );
+  },
+  child: const Text('Lobby', style: TextStyle(color: Colors.red)),
+),
+            ElevatedButton(
+              onPressed: () {
+                Navigator.of(context).pop(); // Close the dialog
+                _resetGame(); // Reset the game
+              },
+              child: Text('Play Again', style: TextStyle(color: Theme.of(context).colorScheme.primary)),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+
+ void _resetGame() {
+    setState(() {
+      _board = List.filled(9, '');
+      _playerMoves.clear();
+      _aiMoves.clear();
+      _highlightedMove = null;
+      _isGameOver = false;
+      _currentPlayer = _startingPlayer == 'Player' ? 'X' : 'O'; // Set starting player based on selection
+      if (_startingPlayer == 'AI') {
+        _aiMove(); // If AI starts, make the first move
+      }
+    });
+  }
+}
