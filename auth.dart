@@ -29,16 +29,38 @@ class _AuthScreenState extends State<AuthScreen> {
   void _submit() async {
     final isValid = _form.currentState!.validate();
 
-    if (!isValid || (!_isLogin && _selectedImage == null)) {
+    if (!isValid){
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Please select an image for your profile.'),
+          content: Text('please complete all information'),
+        ),
+      );
+      return;
+    }
+
+    if (!_isLogin && _selectedImage == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Please select an image for your profile'),
         ),
       );
       return;
     }
 
     _form.currentState!.save();
+
+    if (!_isLogin) {
+    // Check if the username is unique
+    bool isUsernameUnique = await _checkUsernameUnique(_enteredUsername);
+    if (!isUsernameUnique) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Username already taken. Please choose another one.'),
+        ),
+      );
+      return;
+    }
+  }
 
     try {
       setState(() {
@@ -69,20 +91,41 @@ class _AuthScreenState extends State<AuthScreen> {
         });
       }
     } on FirebaseAuthException catch (error) {
-      if (error.code == 'email-already-in-use') {
-        // ...
-      }
-      ScaffoldMessenger.of(context).clearSnackBars();
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(error.message ?? 'Authentication failed.'),
-        ),
-      );
+  String message = 'Authentication failed.';
+  if (error.code == 'email-already-in-use') {
+    message = 'This email is already in use.';
+  } else if (error.code == 'weak-password') {
+    message = 'The password is too weak.';
+  } else if (error.code == 'invalid-email') {
+    message = 'The email is invalid.';
+  } else if (error.code == 'user-not-found') {
+    message = 'No user found for that email.';
+  } else if (error.code == 'wrong-password') {
+    message = 'Incorrect password.';
+  }
+
+  ScaffoldMessenger.of(context).clearSnackBars();
+  ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
+
       setState((){
         _isAuthenticating = false;
       });
     }
   }
+  Future<bool> _checkUsernameUnique(String username) async {
+     try {
+    final querySnapshot = await FirebaseFirestore.instance
+        .collection('users')
+        .where('username', isEqualTo: username)
+        .get();
+
+    // If the query result is empty, the username is unique
+    return querySnapshot.docs.isEmpty;
+  } catch (error) {
+    print('Error checking username uniqueness: $error');
+    return false; // Assume false to prevent allowing duplicate usernames in case of error
+  }
+}
 
 
 
@@ -149,7 +192,7 @@ class _AuthScreenState extends State<AuthScreen> {
                             validator: (value) {
                               if (value == null ||
                                   value.trim().isEmpty ||
-                                  !value.contains('@')) {
+                                  !value.contains('@') || !value.contains('.com')){
                                 return 'Please enter a valid email address.';
                               }
 
