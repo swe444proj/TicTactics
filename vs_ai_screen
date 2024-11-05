@@ -17,9 +17,12 @@ class _VsAiScreenState extends State<VsAiScreen> {
 
   List<int> _playerMoves = []; // To track player (X) moves
   List<int> _aiMoves = [];     // To track AI (O) moves
-  List<String> _startingOptions = ['Player', 'AI']; // Options for starting player
 
-  List<String> _difficulties = ['Easy', 'Normal', 'Hard', 'Impossible']; // Difficulty options
+   int _playerWins = 0;
+  int _aiWins = 0;
+  
+
+  List<String> _difficulties = ['Easy', 'Normal', 'Hard', 'Extreme']; // Difficulty options
   String _selectedDifficulty = 'Easy'; // Default selected difficulty
 
   @override
@@ -38,8 +41,8 @@ class _VsAiScreenState extends State<VsAiScreen> {
       case 'Hard':
         _difficulty = 'hard';
         break;
-      case 'Impossible':
-        _difficulty = 'impossible';
+      case 'Extreme':
+        _difficulty = 'extreme';
         break;
       default:
         _difficulty = 'easy';
@@ -52,95 +55,61 @@ class _VsAiScreenState extends State<VsAiScreen> {
       backgroundColor: Theme.of(context).colorScheme.primary,
       appBar: AppBar(
         backgroundColor: Theme.of(context).colorScheme.primary,
-        title: Text(
+        title: const Text(
           'Tic Tactics - VS AI',
-          style: TextStyle(color: Colors.white), // Set AppBar title color to white
+          style: TextStyle(color: Colors.white),
         ),
-        iconTheme: IconThemeData(
-    color: const Color.fromARGB(255, 255, 255, 255), // Change this to the desired color
-  ),
+        iconTheme: const IconThemeData(
+          color:  Color.fromARGB(255, 255, 255, 255),
+        ),
+        actions: [
+          
+          IconButton(
+            icon: const Icon(Icons.settings, color: Colors.white),
+            onPressed: _showSettingsDialog,
+          ),
+        ],
       ),
       body: Column(
-        mainAxisAlignment: MainAxisAlignment.center, // Center vertically
+        mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          // Dropdown to select difficulty above the board
-          Padding(
-            padding: const EdgeInsets.all(16.0),
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
+             Text.rich(
+            TextSpan(
               children: [
-                // Dropdown for Difficulty
-                DropdownButton<String>(
-                  value: _selectedDifficulty,
-                  icon: Icon(Icons.arrow_downward, color: Colors.white),
-                  elevation: 16,
-                  style: TextStyle(color: Theme.of(context).colorScheme.primary),
-                  underline: Container(
-                    height: 2,
-                    color: Colors.white,
+                const TextSpan(
+                  text: 'X  ', 
+                  style: TextStyle(
+                    fontSize: 80, 
+                    color: Colors.blue,
+                    fontWeight: FontWeight.bold,
                   ),
-                  dropdownColor: Theme.of(context).colorScheme.primary,
-                  onChanged: (String? newValue) {
-                    setState(() {
-                      _selectedDifficulty = newValue!;
-                      _applyDifficulty(_selectedDifficulty);
-                      _resetGame(); // Restart the game when difficulty changes
-                    });
-                  },
-                  items: _difficulties.map<DropdownMenuItem<String>>((String value) {
-                    return DropdownMenuItem<String>(
-                      value: value,
-                      child: Text(
-                        value,
-                        style: const TextStyle(color: Colors.white, fontSize: 20),
-                      ),
-                    );
-                  }).toList(),
                 ),
-                
-                SizedBox(height: 16), // Spacer
-                
-                // Text "Start?"
-                Text(
-                  "Start?",
-                  style: TextStyle(color: Colors.white, fontSize: 20),
+                TextSpan(
+                  text: ' $_playerWins - $_aiWins ', 
+                  style: const TextStyle(
+                    fontSize: 50, 
+                    color: Colors.white,
+                    fontWeight: FontWeight.bold,
+                  ),
                 ),
-                
-                // Radio buttons for starting player
-                RadioListTile<String>(
-                  title: const Text('Player', style: TextStyle(color: Colors.white)),
-                  value: 'Player',
-                  groupValue: _startingPlayer,
-                  activeColor: Colors.blue, // Blue when selected
-                  onChanged: (String? value) {
-                    setState(() {
-                      _startingPlayer = value!;
-                      _resetGame(); // Restart the game when starting player changes
-                    });
-                  },
-                ),
-                RadioListTile<String>(
-                  title: const Text('AI', style: TextStyle(color: Colors.white)),
-                  value: 'AI',
-                  groupValue: _startingPlayer,
-                  activeColor: Colors.blue, // Blue when selected
-                  onChanged: (String? value) {
-                    setState(() {
-                      _startingPlayer = value!;
-                      _resetGame(); // Restart the game when starting player changes
-                    });
-                  },
+                const TextSpan(
+                  text: '  O', 
+                  style: TextStyle(
+                    fontSize: 80, 
+                    color: Colors.red,
+                    fontWeight: FontWeight.bold,
+                  ),
                 ),
               ],
             ),
           ),
-
+          const SizedBox(height: 20),
           Center(
             child: SizedBox(
-              width: 400, // Adjust width to center the board
-              height: 400, // Adjust height to center the board
+              width: 400,
+              height: 400,
               child: GridView.builder(
-                gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
                   crossAxisCount: 3,
                   crossAxisSpacing: 0,
                   mainAxisSpacing: 0,
@@ -153,7 +122,7 @@ class _VsAiScreenState extends State<VsAiScreen> {
                       decoration: BoxDecoration(
                         border: Border.all(color: const Color.fromARGB(255, 255, 255, 255), width: 2.5),
                         color: _highlightedMove == index
-                            ? Colors.yellow.withOpacity(0.5) // Highlight the move that will disappear
+                            ? Colors.yellow.withOpacity(0.45)
                             : Colors.transparent,
                       ),
                       child: Center(
@@ -162,10 +131,10 @@ class _VsAiScreenState extends State<VsAiScreen> {
                           style: TextStyle(
                             fontSize: 80,
                             color: _board[index] == 'X'
-                                ? Colors.blue // X is blue
+                                ? Colors.blue
                                 : _board[index] == 'O'
-                                    ? Colors.red // O is red
-                                    : Colors.white, // Empty cells are white
+                                    ? Colors.red
+                                    : Colors.white,
                           ),
                         ),
                       ),
@@ -180,16 +149,127 @@ class _VsAiScreenState extends State<VsAiScreen> {
               onPressed: _resetGame,
               child: Text(
                 'Play Again',
-                style: TextStyle(color: Theme.of(context).colorScheme.primary), // Set button text color to white
+                style: TextStyle(color: Theme.of(context).colorScheme.primary),
               ),
               style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.white, // Button background color
+                backgroundColor: Colors.white,
               ),
             ),
         ],
       ),
     );
   }
+ void _showSettingsDialog() {
+  String tempDifficulty = _selectedDifficulty;
+  String tempStartingPlayer = _startingPlayer;
+
+  showDialog(
+    context: context,
+    builder: (BuildContext context) {
+      return AlertDialog(
+        title: const Text('Settings'),
+        content: StatefulBuilder( 
+          builder: (BuildContext context, StateSetter setState) {
+            return Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                // Dropdown for Difficulty
+                DropdownButton<String>(
+                  value: tempDifficulty,
+                  icon: const Icon(Icons.arrow_downward),
+                  onChanged: (String? newValue) {
+                    setState(() {
+                      tempDifficulty = newValue!;
+                    });
+                  },
+                  items: _difficulties.map<DropdownMenuItem<String>>((String value) {
+                    return DropdownMenuItem<String>(
+                      value: value,
+                      child: Text(value),
+                    );
+                  }).toList(),
+                ),
+                
+                const SizedBox(height: 16), 
+                
+                // Radio buttons for starting player
+                RadioListTile<String>(
+                  title:  RichText(
+                    text: TextSpan(
+                      children: [
+                        TextSpan(
+                          text: 'You', 
+                          style: TextStyle(color: Colors.blue, fontWeight: FontWeight.bold), 
+                        ),
+                        TextSpan(
+                          text: ' start', 
+                          style: TextStyle(color: const Color.fromARGB(255, 0, 0, 0)),
+                        ),
+                      ],
+                      style: TextStyle(fontSize: 17)
+                    ),
+                  ),
+                  value: 'Player',
+                  groupValue: tempStartingPlayer,
+                  onChanged: (String? value) {
+                    setState(() {
+                      tempStartingPlayer = value!;
+                    });
+                  },
+                ),
+                RadioListTile<String>(
+                  title: RichText(
+                    text: TextSpan(
+                      children: [
+                        TextSpan(
+                          text: 'AI', 
+                          style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold), 
+                        ),
+                        TextSpan(
+                          text: ' starts', 
+                          style: TextStyle(color: const Color.fromARGB(255, 0, 0, 0)),
+                        ),
+                      ],
+                      style: TextStyle(fontSize: 17)
+                    ),
+                  ),
+                  value: 'AI',
+                  groupValue: tempStartingPlayer,
+                  onChanged: (String? value) {
+                    setState(() {
+                      tempStartingPlayer = value!;
+                    });
+                  },
+                ),
+              ],
+            );
+          },
+        ),
+        actions: [
+          TextButton(
+            onPressed: () {
+              Navigator.of(context).pop(); 
+            },
+            child: const Text('Cancel', style: TextStyle(color: Colors.red),),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              // Apply changes and reset game
+              setState(() {
+                _selectedDifficulty = tempDifficulty;
+                _applyDifficulty(_selectedDifficulty);
+                _startingPlayer = tempStartingPlayer;
+                _resetGame(); // Reset game with new settings
+              });
+              Navigator.of(context).pop();
+            },
+            child: const Text('Apply'),
+          ),
+        ],
+      );
+    },
+  );
+}
 
   void _makeMove(int index) {
   if (_board[index] == '' && !_isGameOver) {
@@ -198,7 +278,7 @@ class _VsAiScreenState extends State<VsAiScreen> {
       _playerMoves.add(index); // Track the player's move
 
       // Highlight the oldest move as soon as the player has 3 or more moves
-      if (_playerMoves.length >= 3) {
+      if (_playerMoves.length >= 3 && _difficulty != 'extreme') {
         _highlightedMove = _playerMoves.first;
       }
     });
@@ -208,7 +288,9 @@ class _VsAiScreenState extends State<VsAiScreen> {
       setState(() {
         int oldestMove = _playerMoves.removeAt(0); // Remove oldest move
         _board[oldestMove] = ''; // Clear the oldest move on the board
+        if (_difficulty != 'extreme'){
         _highlightedMove = _playerMoves.isNotEmpty ? _playerMoves.first : null; // Update highlight
+         } 
       });
     }
 
@@ -223,7 +305,7 @@ class _VsAiScreenState extends State<VsAiScreen> {
   }
 }
 
-  void _aiMove() {
+  void _aiMove() async{
   List<int> availableMoves = [];
   for (int i = 0; i < _board.length; i++) {
     if (_board[i] == '') {
@@ -251,18 +333,15 @@ class _VsAiScreenState extends State<VsAiScreen> {
       aiMoveIndex = _findWinningMove('O') ?? _findBlockingMove() ?? _getRandomMove(availableMoves);
       break;
 
-    case 'impossible':
+    case 'extreme':
     aiMoveIndex = _findWinningMove('O') ?? _findBlockingMove() ?? _getRandomMove(availableMoves);
       break;
-
-      // Impossible mode: Use minimax algorithm for perfect play
-      //var bestMove = _minimax('O', 0, -1000, 1000); // Set alpha = -1000 and beta = 1000
-      //aiMoveIndex = bestMove['index'];
-      //break;
 
     default:
       aiMoveIndex = _getRandomMove(availableMoves);
   }
+   // Delay the AI move by half a second
+  await Future.delayed(Duration(milliseconds: 250));
 
   setState(() {
     _board[aiMoveIndex] = 'O';
@@ -344,13 +423,18 @@ List<List<int>> _winningCombinations() {
 }
 
   Future<void> _showResult(String message) async {
+     if (message.contains('Player X Wins')) {
+      _playerWins++;
+    } else if (message.contains('AI Wins')) {
+      _aiWins++;
+    }
     showDialog(
       context: context,
       builder: (context) {
         return AlertDialog(
           title: const Text('Game Over', style: TextStyle(fontSize: 30, color: Color.fromARGB(255, 0, 0, 0)), textAlign: TextAlign.center),
           content: Text(message, style: const TextStyle(fontSize: 15, color: Color.fromARGB(255, 0, 0, 0)), textAlign: TextAlign.center),
-          backgroundColor: Colors.white, // Match the app theme
+          backgroundColor: Colors.white, 
           actions: [
             TextButton(
   onPressed: () {
@@ -358,15 +442,15 @@ List<List<int>> _winningCombinations() {
       MaterialPageRoute(
         builder: (context) => LobbyScreen(), // Navigate to LobbyScreen
       ),
-      (Route<dynamic> route) => false, // Remove all previous routes
+      (Route<dynamic> route) => false, 
     );
   },
   child: const Text('Lobby', style: TextStyle(color: Colors.red)),
 ),
             ElevatedButton(
               onPressed: () {
-                Navigator.of(context).pop(); // Close the dialog
-                _resetGame(); // Reset the game
+                Navigator.of(context).pop(); 
+                _resetGame(); 
               },
               child: Text('Play Again', style: TextStyle(color: Theme.of(context).colorScheme.primary)),
             ),
@@ -386,8 +470,8 @@ List<List<int>> _winningCombinations() {
       _isGameOver = false;
       _currentPlayer = _startingPlayer == 'Player' ? 'X' : 'O'; // Set starting player based on selection
       if (_startingPlayer == 'AI') {
-        _aiMove(); // If AI starts, make the first move
+        _aiMove();
       }
     });
   }
-}
+} 
