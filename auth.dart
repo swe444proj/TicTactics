@@ -67,7 +67,7 @@ class _AuthScreenState extends State<AuthScreen> {
         _isAuthenticating = true;
       });
       if (_isLogin) {
-        final userCredentials = await _firebase.signInWithEmailAndPassword(
+        await _firebase.signInWithEmailAndPassword(
             email: _enteredEmail, password: _enteredPassword);
       } else {
         final userCredentials = await _firebase.createUserWithEmailAndPassword(
@@ -88,6 +88,13 @@ class _AuthScreenState extends State<AuthScreen> {
           'username': _enteredUsername,
           'email': _enteredEmail,
           'image_url': imageUrl,
+          'gamesPlayed': 0,
+          'winGames': 0,
+          'loseGames': 0,
+          'score': 1000,
+          'highestScore': 1000,
+          'friends': [],
+          'lastFiveGames': [],
         });
       }
     } on FirebaseAuthException catch (error) {
@@ -113,7 +120,7 @@ class _AuthScreenState extends State<AuthScreen> {
     }
   }
   Future<bool> _checkUsernameUnique(String username) async {
-     try {
+  try {
     final querySnapshot = await FirebaseFirestore.instance
         .collection('users')
         .where('username', isEqualTo: username)
@@ -123,7 +130,7 @@ class _AuthScreenState extends State<AuthScreen> {
     return querySnapshot.docs.isEmpty;
   } catch (error) {
     print('Error checking username uniqueness: $error');
-    return false; // Assume false to prevent allowing duplicate usernames in case of error
+    return false; 
   }
 }
 
@@ -174,8 +181,9 @@ class _AuthScreenState extends State<AuthScreen> {
                               validator: (value) {
                                 if (value == null ||
                                     value.isEmpty ||
-                                    value.trim().length < 4) {
-                                  return 'Please enter at least 4 characters.';
+                                    value.trim().length < 4 ||
+                                    value.trim().length >10) {
+                                  return 'Username has to be 4-10 characters';
                                 }
                                 return null;
                               },
