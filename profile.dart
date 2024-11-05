@@ -15,13 +15,20 @@ class ProfileScreen extends StatefulWidget {
 class _ProfileScreenState extends State<ProfileScreen> {
   final _firebase = FirebaseAuth.instance;
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
-  final _formKey = GlobalKey<FormState>();
-
-  final TextEditingController _emailController = TextEditingController();
+  
 
   String? _username;
   String? _email;
   String? _imageUrl;
+  int? _gamesPlayed;
+  int? _winGames;
+  int? _loseGames;
+  double? _winLossRatio;
+  int? _score;
+  int? _highestScore;
+  int? _globalRank;
+  int? _friendsRank;
+  List<String> _lastFiveGames = [];
   bool _isLoading = false;
   File? _pickedImageFile;
 
@@ -48,9 +55,92 @@ class _ProfileScreenState extends State<ProfileScreen> {
       _username = userData['username'];
       _email = userData['email'];
       _imageUrl = userData['image_url'];
+      _gamesPlayed = userData['gamesPlayed'];
+      _winGames = userData['winGames'];
+      _loseGames = userData['loseGames'];
+      _score = userData['score'];
+      _highestScore = userData['highestScore'];
+      _winLossRatio = (_winGames != null && _loseGames != null && _loseGames! > 0)
+          ? (_winGames! / _loseGames!)
+          : 0.0;
+          _lastFiveGames = List<String>.from(userData['lastFiveGames'] ?? []);
+    });
+
+    await _loadLeaderboardRanks();
+    setState(() {
       _isLoading = false;
     });
   }
+  Future<void> _loadLeaderboardRanks() async {
+  final user = _firebase.currentUser;
+  if (user == null) return;
+
+  try {
+    // Fetch global leaderboard
+    final globalLeaderboard = await _firestore
+        .collection('users')
+        .orderBy('score', descending: true)
+        .get();
+
+    final userSnapshot = await _firestore.collection('users').doc(user.uid).get();
+
+    // Retrieve friend IDs from user's document
+    List<String> friendIds = List<String>.from(userSnapshot.data()?['friends'] ?? []);
+    print("Friend IDs: $friendIds");
+
+    // Add current user's ID to the friends list for ranking purposes if not already there
+    if (!friendIds.contains(user.uid)) {
+      friendIds.add(user.uid);
+    }
+
+    if (friendIds.isNotEmpty) {
+      List<QueryDocumentSnapshot> allFriendDocs = [];
+
+      // Firestore whereIn limit of 10 workaround
+      for (var i = 0; i < friendIds.length; i += 10) {
+        var chunk = friendIds.sublist(i, i + 10 > friendIds.length ? friendIds.length : i + 10);
+        final friendsChunk = await _firestore
+            .collection('users')
+            .where(FieldPath.documentId, whereIn: chunk)
+            .orderBy('score', descending: true)
+            .get();
+        
+        // Add each friend's document to the list
+        allFriendDocs.addAll(friendsChunk.docs);
+      }
+
+      // Sort the combined list of friends by score
+      allFriendDocs.sort((a, b) => (b['score'] as int).compareTo(a['score'] as int));
+      print("Friends leaderboard documents count: ${allFriendDocs.length}");
+
+      // Find the user's rank among friends
+      int friendsRankIndex = allFriendDocs.indexWhere((doc) => doc.id == user.uid);
+      setState(() {
+        _friendsRank = friendsRankIndex != -1 ? friendsRankIndex + 1 : null;
+      });
+      print("User's friend rank: $_friendsRank");
+    } else {
+      // Handle case where there are no friends
+      setState(() {
+        _friendsRank = null;
+      });
+      print("No friends found for user.");
+    }
+
+    // Find global rank
+    int globalRankIndex = globalLeaderboard.docs.indexWhere((doc) => doc.id == user.uid);
+    setState(() {
+      _globalRank = globalRankIndex != -1 ? globalRankIndex + 1 : null;
+    });
+    print("User's global rank: $_globalRank");
+  } catch (e) {
+    print("Error loading leaderboard ranks: $e");
+    setState(() {
+      _friendsRank = null;
+      _globalRank = null;
+    });
+  }
+}
 
   Future<void> _pickImage() async {
     
@@ -81,8 +171,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
     final pickedImage = await ImagePicker().pickImage(
       source: source,
-      imageQuality: 50, // Adjust image quality
-      maxWidth: 150, // Adjust max width
+      imageQuality: 50, 
+      maxWidth: 150, 
     );
 
     if (pickedImage == null) return;
@@ -232,7 +322,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
             onPressed: () async {
                 // Try updating the email and catch any errors
                 await _updateEmail(_emailController.text);
-                Navigator.of(context).pop(); // Close dialog after updating
+                Navigator.of(context).pop(); 
             },
             child: const Text('Update'),
           ),
@@ -332,7 +422,7 @@ Future<void> _reauthenticateUser(User user) async {
       // Navigate back to AuthScreen after account deletion
       Navigator.of(context).pushReplacement(
         MaterialPageRoute(
-          builder: (context) => AuthScreen(), // Replace this with your auth screen widget
+          builder: (context) => AuthScreen(),
         ),
       );
       ScaffoldMessenger.of(context).showSnackBar(
@@ -350,16 +440,16 @@ Future<void> _reauthenticateUser(User user) async {
         .ref()
         .child('user_images')
         .child('${user.uid}.jpg');
-    await storageRef.delete(); // Delete the user's image file from Storage
+    await storageRef.delete(); 
 
     // Delete user document from Firestore
     await FirebaseFirestore.instance
         .collection('users')
         .doc(user.uid)
-        .delete(); // Delete the user's document in Firestore
+        .delete(); 
 
     // Delete the user from Firebase Authentication
-    await user.delete(); // Delete the user account from Firebase Authentication
+    await user.delete(); 
 
     // Sign out the user locally
     await _firebase.signOut();
@@ -367,7 +457,7 @@ Future<void> _reauthenticateUser(User user) async {
     // Navigate the user back to the login screen
     Navigator.of(context).pushReplacement(
       MaterialPageRoute(
-        builder: (context) => AuthScreen(), // Navigate back to Auth Screen
+        builder: (context) => AuthScreen(), 
       ),
     );
 
@@ -388,104 +478,181 @@ Future<void> _reauthenticateUser(User user) async {
     );
   }
 }
+// Additional Widget for Statistics Row
+  Widget _buildStatisticsRow(String title, String value) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 5),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Text(
+            title,
+            style: const TextStyle(fontSize: 18, color: Colors.white, fontWeight: FontWeight.bold),
+          ),
+          Text(
+            value,
+            style: const TextStyle(fontSize: 18, color: Colors.white),
+          ),
+        ],
+      ),
+    );
+  }
+ 
+Widget _buildLastFiveGamesRow() {
+  return Padding(
+    padding: const EdgeInsets.symmetric(vertical: 5),
+    child: Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        const Text(
+          'Last 5 Games:',
+          style: TextStyle(fontSize: 18, color: Colors.white, fontWeight: FontWeight.bold),
+        ),
+        Row(
+          children: _lastFiveGames.isEmpty
+              ? [const Text("No games played", style: TextStyle(color: Colors.white))]
+              : _lastFiveGames.map((result) {
+                  Color color;
+                  String label;
+
+                  // Set color and label based on the result
+                  if (result == "win") {
+                    color = Colors.green;
+                    label = 'W';
+                  } else if (result == "lose") {
+                    color = Colors.red;
+                    label = 'L';
+                  } else {
+                    color = Colors.yellow;
+                    label = 'D';
+                  }
+
+                  return Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 4.0),
+                    child: CircleAvatar(
+                      radius: 12,
+                      backgroundColor: color,
+                      child: Text(
+                        label,
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 12,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ),
+                  );
+                }).toList(),
+        ),
+      ],
+    ),
+  );
+}
 
 
   
   @override
-Widget build(BuildContext context) {
-  return Scaffold(
-    backgroundColor: Theme.of(context).colorScheme.primary,
-    appBar: AppBar(
+  Widget build(BuildContext context) {
+    return Scaffold(
       backgroundColor: Theme.of(context).colorScheme.primary,
-      title: const Text('Profile', style: TextStyle(color: Colors.white),
+      appBar: AppBar(
+        backgroundColor: Theme.of(context).colorScheme.primary,
+        title: const Text('Profile', style: TextStyle(color: Colors.white)),
+        iconTheme: IconThemeData(
+          color: const Color.fromARGB(255, 255, 255, 255), 
+        ),
       ),
-      iconTheme: IconThemeData(
-    color: const Color.fromARGB(255, 255, 255, 255), // Change this to the desired color
-  ),
-  ),
-    body: _isLoading
-        ? const Center(child: CircularProgressIndicator())
-        : SingleChildScrollView(
-            child: Padding(
-              padding: const EdgeInsets.all(16.0),
-              child: Column(
-                children: [
-                  // Display User's Profile Image
-                  CircleAvatar(
-                    radius: 50,
-                    backgroundImage: _pickedImageFile != null
-                        ? FileImage(_pickedImageFile!)
-                        : _imageUrl != null
-                            ? NetworkImage(_imageUrl!) as ImageProvider
-                            : null,
-                  ),
-                  TextButton.icon(
-  onPressed: _pickImage,
-  icon: const Icon(
-    Icons.image,
-    color: Color.fromARGB(255, 255, 255, 255), // Adding color to the icon
-  ),
-  label: const Text(
-    'Change Profile Image',
-    style: TextStyle(
-      fontSize: 16,
-      color: Color.fromARGB(255, 255, 255, 255), // Text color matches the icon
-    ),
-  ),
-),
-                  const SizedBox(height: 16),
-
-                  // Username in Row with Change Button
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Text(
-                        _username != null ? 'Username: $_username' : 'Username',
-                        style: const TextStyle(fontSize: 20, color: Colors.white),
-                      ),
-                      ElevatedButton(
-                        onPressed: _showUpdateUsernameDialog,
-                        child: const Text('Change'),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 16),
-
-                  // Email in Row with Change Button
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Text(
-                        _email != null ? 'Email: $_email' : 'Email',
-                        style: const TextStyle(fontSize: 20, color: Colors.white),
-                      ),
-                      ElevatedButton(
-                        onPressed: _showUpdateEmailDialog,
-                        child: const Text('Change'),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 20),
-
-                  // Reset Password Button
-                  ElevatedButton(
-                    onPressed: _resetPassword,
-                    child: const Text('Reset Password'),
-                  ),
-                  
-                  // Delete Account Button
-                  ElevatedButton(
-                    onPressed: _deleteAccount,
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.red,
+      body: _isLoading
+          ? const Center(child: CircularProgressIndicator())
+          : SingleChildScrollView(
+              child: Padding(
+                padding: const EdgeInsets.all(16.0),
+                child: Column(
+                  children: [
+                    CircleAvatar(
+                      radius: 50,
+                      backgroundImage: _pickedImageFile != null
+                          ? FileImage(_pickedImageFile!)
+                          : _imageUrl != null
+                              ? NetworkImage(_imageUrl!) as ImageProvider
+                              : null,
                     ),
-                    child: const Text('Delete Account'),
-                  ),
-                ],
+                    TextButton.icon(
+                      onPressed: _pickImage,
+                      icon: const Icon(
+                        Icons.image,
+                        color: Color.fromARGB(255, 255, 255, 255),
+                      ),
+                      label: const Text(
+                        'Change Profile Image',
+                        style: TextStyle(
+                          fontSize: 16,
+                          color: Color.fromARGB(255, 255, 255, 255), 
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text(
+                          _username != null ? '$_username' : 'Username',
+                          style: const TextStyle(fontSize: 20, color: Colors.white),
+                        ),
+                        ElevatedButton(
+                          onPressed: _showUpdateUsernameDialog,
+                          child: const Text('Change'),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 16),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text(
+                          _email != null ? '$_email' : 'Email',
+                          style: const TextStyle(fontSize: 20, color: Colors.white),
+                        ),
+                        ElevatedButton(
+                          onPressed: _showUpdateEmailDialog,
+                          child: const Text('Change'),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 20),
+                    ElevatedButton(
+                      onPressed: _resetPassword,
+                      child: const Text('Reset Password'),
+                    ),
+                    ElevatedButton(
+                      onPressed: _deleteAccount,
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.red,
+                      ),
+                      child: const Text('Delete Account'),
+                    ),
+                    
+                    // New Statistics Section
+                    const Divider(color: Colors.white),
+                    const SizedBox(height: 10),
+                    const Text(
+                      'Statistics',
+                      style: TextStyle(fontSize: 24, color: Colors.white, fontWeight: FontWeight.bold),
+                    ),
+                    const SizedBox(height: 10),
+                    _buildStatisticsRow('Games Played:', _gamesPlayed?.toString() ?? '0'),
+                    _buildStatisticsRow('Win Games:', _winGames?.toString() ?? '0'),
+                    _buildStatisticsRow('Lose Games:', _loseGames?.toString() ?? '0'),
+                    _buildStatisticsRow('W/L Ratio:', _winLossRatio != null ? _winLossRatio!.toStringAsFixed(2) : '0.0'),
+                    _buildStatisticsRow('current Score:', _score?.toString() ?? '0'),
+                    _buildStatisticsRow('Highest Score:', _highestScore?.toString() ?? '0'),
+                    _buildStatisticsRow('Global Rank:', _globalRank?.toString() ?? 'N/A'),
+                    _buildStatisticsRow('Friends Rank:', _friendsRank?.toString() ?? 'No friends'),
+                    _buildLastFiveGamesRow(),
+                  ],
+                ),
               ),
             ),
-          ),
-  );
+    );
+  }
 }
-}
-
