@@ -1,1 +1,523 @@
+import 'dart:async';
+import 'package:flutter/material.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'lobby.dart';
+class OnlineGameScreen extends StatefulWidget {
+  final String matchId;
 
+  const OnlineGameScreen({Key? key, required this.matchId}) : super(key: key);
+
+  @override
+  _OnlineGameScreenState createState() => _OnlineGameScreenState();
+}
+
+class _OnlineGameScreenState extends State<OnlineGameScreen> {
+  List<String> _board = List.filled(9, '');
+  String? _currentPlayerId;
+  String? _opponentId;
+  Map<String, dynamic>? _currentPlayerData;
+  Map<String, dynamic>? _opponentData;
+  List<int> _xMoves = [];
+  List<int> _oMoves = [];
+  bool _isLoading = true;
+  bool _isMyTurn = false;
+  String _currentTurn = 'X';
+  late StreamSubscription<DocumentSnapshot> _matchSubscription;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadMatchData();
+    _listenForMatchUpdates();
+  }
+
+  @override
+  void dispose() {
+    _matchSubscription.cancel();
+    super.dispose();
+  }
+
+  Future<void> _loadMatchData() async {
+    try {
+      final matchDoc = await FirebaseFirestore.instance
+          .collection('matches')
+          .doc(widget.matchId)
+          .get();
+
+      if (!matchDoc.exists) {
+        setState(() {
+          _isLoading = false;
+        });
+        return;
+      }
+
+      final matchData = matchDoc.data();
+      final currentUser = FirebaseAuth.instance.currentUser;
+
+      if (matchData == null || currentUser == null) {
+        setState(() {
+          _isLoading = false;
+        });
+        return;
+      }
+
+      _currentPlayerId = currentUser.uid;
+      _opponentId = matchData['player1'] == _currentPlayerId
+          ? matchData['player2']
+          : matchData['player1'];
+
+      if (_opponentId == null || _opponentId!.isEmpty) {
+        setState(() {
+          _isLoading = false;
+        });
+        return;
+      }
+
+      final currentPlayerDoc = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(_currentPlayerId)
+          .get();
+      final opponentDoc = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(_opponentId)
+          .get();
+
+      if (!currentPlayerDoc.exists || !opponentDoc.exists) {
+        setState(() {
+          _isLoading = false;
+        });
+        return;
+      }
+
+      setState(() {
+        _currentPlayerData = currentPlayerDoc.data();
+        _opponentData = opponentDoc.data();
+        _isLoading = false;
+      });
+    } catch (e) {
+      setState(() {
+        _isLoading = false;
+      });
+    }
+  }
+
+  void _listenForMatchUpdates() {
+    _matchSubscription = FirebaseFirestore.instance
+        .collection('matches')
+        .doc(widget.matchId)
+        .snapshots()
+        .listen((snapshot) {
+      if (snapshot.exists) {
+        final matchData = snapshot.data()!;
+        setState(() {
+          _board = List<String>.from(matchData['board'] ?? List.filled(9, ''));
+          _currentTurn = matchData['turn'] ?? 'X';
+          _xMoves = List<int>.from(matchData['xMoves'] ?? []);
+          _oMoves = List<int>.from(matchData['oMoves'] ?? []);
+
+          _isMyTurn = (_currentTurn == 'X' &&
+                  _currentPlayerId == matchData['player1']) ||
+              (_currentTurn == 'O' && _currentPlayerId == matchData['player2']);
+        });
+
+        if (matchData['roundWinner'] != null) {
+          final roundWinner = matchData['roundWinner'];
+          if (roundWinner == 'draw') {
+            _showMatchEndAlert('draw');
+          } else {
+            final isCurrentPlayerWinner =
+                roundWinner == _currentPlayerData!['username'];
+            _showMatchEndAlert(isCurrentPlayerWinner ? 'You' : 'Opponent');
+          }
+
+          FirebaseFirestore.instance
+              .collection('matches')
+              .doc(widget.matchId)
+              .update({'roundWinner': null});
+        }
+      }
+    });
+  }
+
+  void _handleTap(int index) async {
+    if (!_isMyTurn || _board[index].isNotEmpty) return;
+
+    setState(() {
+      if (_currentTurn == 'X') {
+        if (_xMoves.length == 3) {
+          int oldestMove = _xMoves.removeAt(0);
+          _board[oldestMove] = '';
+        }
+        _xMoves.add(index);
+      } else {
+        if (_oMoves.length == 3) {
+          int oldestMove = _oMoves.removeAt(0);
+          _board[oldestMove] = '';
+        }
+        _oMoves.add(index);
+      }
+
+      _board[index] = _currentTurn;
+      _isMyTurn = false;
+    });
+
+    String? winner = _checkWinner();
+    if (winner != null) {
+      _endRound(winner);
+    } else if (_xMoves.length + _oMoves.length == 9) {
+      _endRound(null);
+    } else {
+      _switchTurn();
+    }
+  }
+
+  Future<void> _switchTurn() async {
+    final newTurn = _currentTurn == 'X' ? 'O' : 'X';
+    await FirebaseFirestore.instance
+        .collection('matches')
+        .doc(widget.matchId)
+        .update({
+      'board': _board,
+      'turn': newTurn,
+      'xMoves': _xMoves,
+      'oMoves': _oMoves,
+    });
+  }
+
+  String? _checkWinner() {
+    const winningCombinations = [
+      [0, 1, 2],
+      [3, 4, 5],
+      [6, 7, 8],
+      [0, 3, 6],
+      [1, 4, 7],
+      [2, 5, 8],
+      [0, 4, 8],
+      [2, 4, 6],
+    ];
+
+    for (var combo in winningCombinations) {
+      if (_board[combo[0]] == _currentTurn &&
+          _board[combo[1]] == _currentTurn &&
+          _board[combo[2]] == _currentTurn) {
+        return _currentTurn;
+      }
+    }
+    return null;
+  }
+
+  Future<void> _endRound(String? winner) async {
+    if (winner != null) {
+      final isCurrentPlayerWinner =
+          (_currentTurn == 'X' && _currentPlayerId == _currentPlayerId) ||
+              (_currentTurn == 'O' && _opponentId == _opponentId);
+
+      if (isCurrentPlayerWinner) {
+        await _updateScores(_currentPlayerId!, true);
+        await _updateScores(_opponentId!, false);
+      } else {
+        await _updateScores(_currentPlayerId!, false);
+        await _updateScores(_opponentId!, true);
+      }
+
+      final winnerUsername = isCurrentPlayerWinner
+          ? _currentPlayerData!['username']
+          : _opponentData!['username'];
+
+      await FirebaseFirestore.instance
+          .collection('matches')
+          .doc(widget.matchId)
+          .update({
+        'roundWinner': winnerUsername,
+      });
+    } else {
+      await FirebaseFirestore.instance
+          .collection('matches')
+          .doc(widget.matchId)
+          .update({
+        'roundWinner': 'draw',
+      });
+    }
+    await FirebaseFirestore.instance
+      .collection('matches')
+      .doc(widget.matchId)
+      .delete();
+  }
+
+  Future<void> _handleQuit() async {
+  if (_currentPlayerId != null && _opponentId != null) {
+    try {
+      // Update the current player's record as a loss
+      await _updateScores(_currentPlayerId!, false);
+
+      // Update the opponent's record as a win
+      await _updateScores(_opponentId!, true);
+
+      // Mark the match as ended with the opponent as the winner
+      final opponentUsername = _opponentData!['username'];
+      await FirebaseFirestore.instance
+          .collection('matches')
+          .doc(widget.matchId)
+          .update({'roundWinner': opponentUsername});
+
+      // Delete the match document
+      await FirebaseFirestore.instance
+          .collection('matches')
+          .doc(widget.matchId)
+          .delete();
+
+      // Show a message and navigate back to the lobby
+      _showMatchEndAlert('Opponent');
+    } catch (e) {
+      print('Error handling quit: $e');
+      // Optionally show a user-friendly message or handle the error
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to quit the match. Please try again.')),
+      );
+    }
+  }
+}
+
+
+  void _showQuitConfirmationDialog() {
+  showDialog(
+    context: context,
+    barrierDismissible: false,
+    builder: (BuildContext dialogContext) {
+      return AlertDialog(
+        title: const Text('Confirm Quit'),
+        content: const Text(
+          'Are you sure you want to quit the match?',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () {
+              Navigator.of(dialogContext).pop(); // Close the dialog
+            },
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () async {
+              Navigator.of(dialogContext).pop(); // Close the dialog
+              await _handleQuit();
+            },
+            child: const Text('Quit', style: TextStyle(color: Color.fromARGB(255, 255, 0, 0)),),
+          ),
+        ],
+      );
+    },
+  );
+}
+
+
+  Future<void> _updateScores(String userId, bool isWinner) async {
+    final userDoc =
+        await FirebaseFirestore.instance.collection('users').doc(userId).get();
+
+    if (!userDoc.exists) return;
+
+    final userData = userDoc.data()!;
+    final updatedLastFiveGames =
+        List<String>.from(userData['lastFiveGames'] ?? []);
+
+    // Add new result to the lastFiveGames array
+    updatedLastFiveGames.insert(0, isWinner ? "Win" : "Loss");
+
+    // Ensure the array does not exceed 5 elements
+    if (updatedLastFiveGames.length > 5) {
+      updatedLastFiveGames.removeLast();
+    }
+
+    final newScore = isWinner
+        ? (userData['score'] ?? 0) + 30
+        : (userData['score'] ?? 0) - 30;
+
+    await FirebaseFirestore.instance.collection('users').doc(userId).update({
+      'score': newScore,
+      'gamesPlayed': (userData['gamesPlayed'] ?? 0) + 1,
+      'winGames':
+          isWinner ? (userData['winGames'] ?? 0) + 1 : userData['winGames'],
+      'loseGames':
+          isWinner ? userData['loseGames'] : (userData['loseGames'] ?? 0) + 1,
+      'lastFiveGames': updatedLastFiveGames,
+    });
+  }
+
+  void _showMatchEndAlert(String winner) async {
+    if (!mounted) return;
+
+    String message;
+    if (winner == 'draw') {
+      message = 'The match ended in a draw!';
+    } else if (winner == 'You') {
+      message = 'You win the match!';
+    } else {
+      message = 'You lose the match!';
+    }
+
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (BuildContext dialogContext) {
+        return AlertDialog(
+          title: const Text('Match Over'),
+          content: Text(message),
+          actions: [
+            TextButton(
+              onPressed: () {
+                Navigator.of(dialogContext).pop();
+                // Navigate to LobbyScreen explicitly
+              Navigator.pushAndRemoveUntil(
+                context,
+                MaterialPageRoute(builder: (context) => LobbyScreen()),
+                (route) => false, // Remove all previous routes
+              );
+            },
+              child: const Text('OK'),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  Widget _buildPlayerAndScoresRow() {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+      children: [
+        _buildPlayerColumn(
+          avatarUrl: _currentPlayerData!['image_url'],
+          username: _currentPlayerData!['username'],
+          score: _currentPlayerData!['score'],
+        ),
+        Column(
+          children: [
+            Text(
+              'VS',
+              style: TextStyle(fontSize: 25, color: Colors.white),
+            ),
+          ],
+        ),
+        _buildPlayerColumn(
+          avatarUrl: _opponentData!['image_url'],
+          username: _opponentData!['username'],
+          score: _opponentData!['score'],
+        ),
+      ],
+    );
+  }
+
+  Widget _buildPlayerColumn(
+      {required String avatarUrl,
+      required String username,
+      required int score}) {
+    return Column(
+      children: [
+        CircleAvatar(
+          radius: 40,
+          backgroundColor: Colors.red,
+          backgroundImage: NetworkImage(avatarUrl),
+        ),
+        const SizedBox(height: 8),
+        Text(
+          username,
+          style: const TextStyle(
+              fontSize: 20, fontWeight: FontWeight.bold, color: Colors.white),
+        ),
+        Text(
+          score.toString(),
+          style: const TextStyle(fontSize: 15, color: Colors.white),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildGameBoard() {
+    return Center(
+      child: SizedBox(
+        width: 400,
+        height: 400,
+        child: GridView.builder(
+          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+            crossAxisCount: 3,
+            crossAxisSpacing: 0,
+            mainAxisSpacing: 0,
+          ),
+          itemCount: 9,
+          itemBuilder: (context, index) {
+            return GestureDetector(
+              onTap: () => _handleTap(index),
+              child: Container(
+                decoration: BoxDecoration(
+                  border: Border.all(color: Colors.white, width: 2.5),
+                  color: Colors.transparent,
+                ),
+                child: Center(
+                  child: Text(
+                    _board[index],
+                    style: TextStyle(
+                      fontSize: 80,
+                      color: _board[index] == 'X' ? Colors.blue : Colors.red,
+                    ),
+                  ),
+                ),
+              ),
+            );
+          },
+        ),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_isLoading) {
+      return Scaffold(
+        appBar: AppBar(title: const Text('Loading...')),
+        body: const Center(child: CircularProgressIndicator()),
+      );
+    }
+
+    if (_currentPlayerData == null || _opponentData == null) {
+      return Scaffold(
+        appBar: AppBar(title: const Text('Error')),
+        body: const Center(child: Text('Failed to load player data')),
+      );
+    }
+
+    return Scaffold(
+      backgroundColor: Theme.of(context).colorScheme.primary,
+      appBar: AppBar(
+        title: const Text(
+          'Tic Tactics - Online',
+          style: TextStyle(color: Colors.white),
+        ),
+        backgroundColor: Theme.of(context).colorScheme.primary,
+        automaticallyImplyLeading: false,
+        actions: [
+  TextButton(
+    onPressed: () {
+      _showQuitConfirmationDialog();
+    },
+    child: const Text(
+      'Quit',
+      style: TextStyle(
+        color: Color.fromARGB(255, 255, 0, 0),
+        fontSize: 18,
+            ),
+           ),
+          ),
+        ],
+      ),
+      body: Column(
+        children: [
+          const SizedBox(height: 20),
+          _buildPlayerAndScoresRow(),
+          const SizedBox(height: 20),
+          _buildGameBoard(),
+        ],
+      ),
+    );
+  }
+}
