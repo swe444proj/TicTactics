@@ -1,3 +1,4 @@
+
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -27,6 +28,7 @@ class _LobbyScreenState extends State<LobbyScreen> {
   Timer? _pollingTimer;
   Timer? countdownTimer;
    bool _hasFriendRequests = false;
+   bool _hasNavigatedToGame = false;
   Map<String, String> requestStatuses = {}; // Track friend request status per user
   Map<String, bool> friendStatuses = {}; // Track friendship status per user
   void setupPushNotifications() async {
@@ -846,6 +848,8 @@ Future<void> _startOnlineMatchmaking() async {
         'player2': null,
         'status': 'waiting',
         'createdAt': FieldValue.serverTimestamp(),
+        'board' : List.filled(9, ""),  // Empty board
+        'turn': "X",  // Player X starts
       });
       print("New match created for player: $playerId with ID: ${newMatch.id}");
 
@@ -859,7 +863,6 @@ Future<void> _startOnlineMatchmaking() async {
     );
   }
 }
-
 // Function to listen for match status changes
 void _listenForMatchStatus(String matchId, Timer? countdownTimer) {
   final matchCollection = FirebaseFirestore.instance.collection('matches');
@@ -868,14 +871,17 @@ void _listenForMatchStatus(String matchId, Timer? countdownTimer) {
     if (snapshot.exists) {
       final matchData = snapshot.data();
 
-      // Check if the match status is 'matched'
-      if (matchData != null && matchData['status'] == 'matched') {
+      // Check if the match status is 'matched' and we haven't navigated yet
+      if (matchData != null && matchData['status'] == 'matched' && !_hasNavigatedToGame) {
         print("Match is now matched. Navigating to OnlineGameScreen...");
+
+        // Set the flag to true to prevent further navigation
+        _hasNavigatedToGame = true;
 
         // Stop the countdown timer
         countdownTimer?.cancel();
 
-        // Close the searching dialog
+        // Close the searching dialog if it's open
         if (Navigator.canPop(context)) {
           Navigator.of(context).pop(); // Close the search dialog
         }
