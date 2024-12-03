@@ -1,4 +1,4 @@
-import 'dart:io';
+mport 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -516,10 +516,10 @@ Widget _buildLastFiveGamesRow() {
                   String label;
 
                   // Set color and label based on the result
-                  if (result == "win") {
+                  if (result == "Win") {
                     color = Colors.green;
                     label = 'W';
-                  } else if (result == "lose") {
+                  } else if (result == "Loss") {
                     color = Colors.red;
                     label = 'L';
                   } else {
