@@ -1,1 +1,365 @@
+mport 'package:flutter/material.dart';
+import 'lobby.dart'; 
 
+class LocalDeviceGameScreen extends StatefulWidget {
+  @override
+  _LocalDeviceGameScreenState createState() => _LocalDeviceGameScreenState();
+}
+
+class _LocalDeviceGameScreenState extends State<LocalDeviceGameScreen> {
+  List<String> _board = List.filled(9, ''); // Initialize the board with empty strings
+  String _currentPlayer = 'X'; // Player 'X' goes first
+  String _startingPlayer = 'X'; // Starting player selected in the dropdown
+  bool _isGameOver = false;
+  String _gameResult = ''; // Stores the result of the game 
+  List<int> _playerXMoves = []; // To track player X's moves
+  List<int> _playerOMoves = []; // To track player O's moves
+  int _xScore = 0; // Player X's score
+  int _oScore = 0; // Player O's score
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: Theme.of(context).colorScheme.primary,
+      appBar: AppBar(
+        backgroundColor: Theme.of(context).colorScheme.primary,
+        title: Text(
+          'Tic Tactics - Local Device',
+          style: TextStyle(color: Colors.white),
+        ),
+        iconTheme: IconThemeData(
+          color: const Color.fromARGB(255, 255, 255, 255), 
+        ),
+        actions: [
+          IconButton(
+            icon: Icon(Icons.settings, color: Colors.white),
+            onPressed: _showSettingsDialog, 
+          ),
+        ],
+      ),
+      body: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          
+          Text.rich(
+            TextSpan(
+              children: [
+                const TextSpan(
+                  text: 'X  ', 
+                  style: TextStyle(
+                    fontSize: 80, 
+                    color: Colors.blue,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                TextSpan(
+                  text: ' $_xScore - $_oScore ', 
+                  style: const TextStyle(
+                    fontSize: 50, 
+                    color: Colors.white,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                TextSpan(
+                  text: '  O', 
+                  style: TextStyle(
+                    fontSize: 80, 
+                    color: Colors.red,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 20),
+
+         Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Text(
+                _isGameOver
+                    ? _gameResult
+                    : 'Turn: ', 
+                style: TextStyle(color: Colors.white, fontSize: 35),
+              ),
+              Text(
+                _currentPlayer, 
+                style: TextStyle(
+                  color: _currentPlayer == 'X' ? Colors.blue : Colors.red, 
+                  fontSize: 35,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 20),
+
+          // The board
+          Center(
+            child: SizedBox(
+              width: 400,
+              height: 400,
+              child: GridView.builder(
+                gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                  crossAxisCount: 3, 
+                  crossAxisSpacing: 0,
+                  mainAxisSpacing: 0,
+                ),
+                itemCount: 9, 
+                itemBuilder: (context, index) {
+                  return GestureDetector(
+                    onTap: () => _makeMove(index),
+                    child: Container(
+                      decoration: BoxDecoration(
+                        border: Border.all(color: const Color.fromARGB(255, 255, 255, 255), width: 2.5),
+                        color: Colors.transparent, 
+                      ),
+                      child: Center(
+                        child: Text(
+                          _board[index], 
+                          style: TextStyle(
+                            fontSize: 80,
+                            color: _board[index] == 'X'
+                                ? Colors.blue 
+                                : _board[index] == 'O'
+                                    ? Colors.red 
+                                    : Colors.white, 
+                          ),
+                        ),
+                      ),
+                    ),
+                  );
+                },
+              ),
+            ),
+          ),
+          if (_isGameOver)
+            ElevatedButton(
+              onPressed: _resetGame, 
+              child: Text(
+                'Play Again',
+                style: TextStyle(color: Theme.of(context).colorScheme.primary),
+              ),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.white,
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+  // Show the settings dialog to select the starting player
+  void _showSettingsDialog() {
+    String tempStartingPlayer = _startingPlayer; // Temporary variable for dialog selection
+
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: Text('Settings'),
+          content: StatefulBuilder(
+            builder: (BuildContext context, StateSetter setState) {
+              return Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  RadioListTile<String>(
+                  value: 'X',
+                  groupValue: tempStartingPlayer,
+                  onChanged: (String? value) {
+                    setState(() {
+                      tempStartingPlayer = value!;
+                    });
+                  },
+                  title: RichText(
+                    text: TextSpan(
+                      children: [
+                        TextSpan(
+                          text: 'Player ', 
+                          style: TextStyle(color: Colors.black), 
+                        ),
+                        TextSpan(
+                          text: 'X', 
+                          style: TextStyle(color: Colors.blue, fontWeight: FontWeight.bold),
+                        ),
+                        TextSpan(
+                          text: ' starts', 
+                          style: TextStyle(color: const Color.fromARGB(255, 0, 0, 0)),
+                        ),
+                      ],
+                      style: TextStyle(fontSize: 17)
+                    ),
+                  ),
+                ),
+
+                
+                RadioListTile<String>(
+                  value: 'O',
+                  groupValue: tempStartingPlayer,
+                  onChanged: (String? value) {
+                    setState(() {
+                      tempStartingPlayer = value!;
+                    });
+                  },
+                  title: RichText(
+                    text: TextSpan(
+                      children: [
+                        TextSpan(
+                          text: 'Player ', 
+                          style: TextStyle(color: Colors.black), 
+                        ),
+                        TextSpan(
+                          text: 'O', 
+                          style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold),
+                        ),
+                        TextSpan(
+                          text: ' starts', 
+                          style: TextStyle(color: const Color.fromARGB(255, 0, 0, 0)),
+                        ),
+                      ],
+                      style: TextStyle(fontSize: 17)
+                    ),
+                  ),
+                ),
+              ],
+            );
+          },
+        ),
+          actions: [
+            TextButton(
+              onPressed: () {
+                Navigator.of(context).pop(); 
+              },
+              child: Text('Cancel'),
+            ),
+            ElevatedButton(
+              onPressed: () {
+                
+                setState(() {
+                  _startingPlayer = tempStartingPlayer; // Update starting player
+                  _resetGame(); // Reset game with new settings
+                });
+                Navigator.of(context).pop(); 
+              },
+              child: Text('Apply'),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  // Handle a player making a move
+  void _makeMove(int index) {
+    if (_board[index] == '' && !_isGameOver) {
+      setState(() {
+        _board[index] = _currentPlayer; // Mark the board with the current player
+
+        // Track moves for each player and remove the oldest move once the player has 3 moves
+        if (_currentPlayer == 'X') {
+          _playerXMoves.add(index);
+          if (_playerXMoves.length > 3) {
+            int oldestMove = _playerXMoves.removeAt(0); // Remove the oldest move
+            _board[oldestMove] = ''; // Clear the oldest move from the board
+          }
+        } else {
+          _playerOMoves.add(index);
+          if (_playerOMoves.length > 3) {
+            int oldestMove = _playerOMoves.removeAt(0); // Remove the oldest move
+            _board[oldestMove] = ''; // Clear the oldest move from the board
+          }
+        }
+
+        // Check if the current player has won
+        if (_checkWin(_currentPlayer)) {
+          _isGameOver = true;
+          if (_currentPlayer == 'X') {
+            _xScore++; // Increase X's score
+          } else {
+            _oScore++; // Increase O's score
+          }
+          _showResult('Player $_currentPlayer Wins!');
+        } else {
+          // If no one has won, switch to the other player
+          _currentPlayer = _currentPlayer == 'X' ? 'O' : 'X';
+        }
+      });
+    }
+  }
+
+  // Check if the current player has won
+  bool _checkWin(String player) {
+    const winningCombinations = [
+      [0, 1, 2], // Top row
+      [3, 4, 5], // Middle row
+      [6, 7, 8], // Bottom row
+      [0, 3, 6], // Left column
+      [1, 4, 7], // Middle column
+      [2, 5, 8], // Right column
+      [0, 4, 8], // Diagonal from top-left to bottom-right
+      [2, 4, 6], // Diagonal from top-right to bottom-left
+    ];
+
+    for (var combination in winningCombinations) {
+      if (_board[combination[0]] == player &&
+          _board[combination[1]] == player &&
+          _board[combination[2]] == player) {
+        return true; // Player wins if they have all three marks in a row
+      }
+    }
+    return false; // No win detected
+  }
+
+  // Show the result when the game ends (win or draw)
+  Future<void> _showResult(String message) async {
+    showDialog(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: const Text(
+            'Game Over',
+            style: TextStyle(fontSize: 30, color: Color.fromARGB(255, 0, 0, 0)),
+            textAlign: TextAlign.center,
+          ),
+          content: Text(
+            message,
+            style: const TextStyle(fontSize: 15, color: Color.fromARGB(255, 0, 0, 0)),
+            textAlign: TextAlign.center,
+          ),
+          backgroundColor: Colors.white, 
+          actions: [
+            TextButton(
+              onPressed: () {
+                Navigator.of(context).pushAndRemoveUntil(
+                  MaterialPageRoute(
+                    builder: (context) => LobbyScreen(), 
+                  ),
+                  (Route<dynamic> route) => false, 
+                );
+              },
+              child: const Text('Lobby', style: TextStyle(color: Colors.red)),
+            ),
+            ElevatedButton(
+              onPressed: () {
+                Navigator.of(context).pop(); 
+                _resetGame(); 
+              },
+              child: Text('Play Again', style: TextStyle(color: Theme.of(context).colorScheme.primary)),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  // Reset the game to start a new round, keeping the scores intact
+  void _resetGame() {
+    setState(() {
+      _board = List.filled(9, ''); // Reset the board to empty
+      _currentPlayer = _startingPlayer; // Start with the selected starting player
+      _playerXMoves.clear(); // Clear player X's moves
+      _playerOMoves.clear(); // Clear player O's moves
+      _isGameOver = false; // Reset game over flag
+      _gameResult = ''; // Clear the result message
+    });
+  }
+}
