@@ -1,5 +1,4 @@
-mport 'dart:math'; 
-import 'package:flutter/material.dart';
+mport 'package:flutter/material.dart';
 import 'package:tic_tactics/lobby.dart';
 
 class VsAiScreen extends StatefulWidget {
